@@ -20,6 +20,7 @@ public class MainFrame extends JFrame {
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
+            System.out.println(System.getProperty("java.class.path"));
             new MainFrame().setVisible(true);
         });
     }

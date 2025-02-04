@@ -13,6 +13,7 @@ public class CountriesPanel extends JPanel {
     private JTextField idField;
     private JTextField nameField;
     private JTextField populationField;
+    private JTextField searchField;
 
     public CountriesPanel() {
         setLayout(new BorderLayout(10, 10));
@@ -24,7 +25,7 @@ public class CountriesPanel extends JPanel {
 
     private void initTable() {
         table = new JTable(new DefaultTableModel(
-                new Object[]{"ID", "Country Name", "Population"}, 0) {
+                new Object[]{"ID", "Название страны", "Население"}, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
                 return false;
@@ -34,10 +35,10 @@ public class CountriesPanel extends JPanel {
     }
 
     private JPanel createControlPanel() {
-        JPanel panel = new JPanel(new GridLayout(2, 1, 10, 10));
+        JPanel panel = new JPanel(new GridLayout(3, 1, 10, 10));
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // Input fields
+        // Поля ввода
         JPanel inputPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
         idField = new JTextField(6);
         nameField = new JTextField(20);
@@ -45,15 +46,15 @@ public class CountriesPanel extends JPanel {
 
         inputPanel.add(new JLabel("ID:"));
         inputPanel.add(idField);
-        inputPanel.add(new JLabel("Name:"));
+        inputPanel.add(new JLabel("Название страны:"));
         inputPanel.add(nameField);
-        inputPanel.add(new JLabel("Population:"));
+        inputPanel.add(new JLabel("Население:"));
         inputPanel.add(populationField);
 
-        // Buttons
+        // Кнопки
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
-        JButton addBtn = new JButton("Add Country");
-        JButton deleteBtn = new JButton("Delete Selected");
+        JButton addBtn = new JButton("Добавить страну");
+        JButton deleteBtn = new JButton("Удалить выбранную");
 
         addBtn.addActionListener(e -> addCountry());
         deleteBtn.addActionListener(e -> deleteCountry());
@@ -61,20 +62,76 @@ public class CountriesPanel extends JPanel {
         buttonPanel.add(addBtn);
         buttonPanel.add(deleteBtn);
 
+        // Поиск
+        JPanel searchPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
+        searchField = new JTextField(20);
+        searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                filterTable(searchField.getText().trim());
+            }
+
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                filterTable(searchField.getText().trim());
+            }
+
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                filterTable(searchField.getText().trim());
+            }
+        });
+
+        searchPanel.add(new JLabel("Поиск:"));
+        searchPanel.add(searchField);
+
         panel.add(inputPanel);
         panel.add(buttonPanel);
+        panel.add(searchPanel);
         return panel;
+    }
+
+    private void filterTable(String searchText) {
+        DefaultTableModel model = (DefaultTableModel) table.getModel();
+        model.setRowCount(0);
+
+        try {
+            DatabaseManager.getAllCountries().stream()
+                    .filter(country -> country.getName().toLowerCase().contains(searchText.toLowerCase()))
+                    .forEach(country -> model.addRow(new Object[]{
+                            country.getId(),
+                            country.getName(),
+                            String.format("%,d", country.getPopulation())
+                    }));
+        } catch (SQLException ex) {
+            handlePostgreSQLError(ex);
+        }
     }
 
     private void addCountry() {
         try {
-            int id = Integer.parseInt(idField.getText().trim());
+            String idStr = idField.getText().trim();
             String name = nameField.getText().trim();
-            int population = Integer.parseInt(populationField.getText().trim());
+            String populationStr = populationField.getText().trim();
+
+            if (!idStr.matches("\\d+")) {
+                throw new IllegalArgumentException("Некорректный формат числа.");
+            }
+
+            if (!name.matches("[a-zA-Z\\s]+")) {
+                throw new IllegalArgumentException("Некорректное название страны.");
+            }
 
             if (name.isEmpty()) {
-                throw new IllegalArgumentException("Country name cannot be empty");
+                throw new IllegalArgumentException("Название страны не может быть пустым.");
             }
+
+            if (!populationStr.matches("\\d+")) {
+                throw new IllegalArgumentException("Некорректный формат числа.");
+            }
+
+            int id = Integer.parseInt(idStr);
+            int population = Integer.parseInt(populationStr);
 
             Country country = new Country(id, name, population);
             DatabaseManager.addCountry(country);
@@ -82,7 +139,7 @@ public class CountriesPanel extends JPanel {
             clearFields();
 
         } catch (NumberFormatException ex) {
-            showError("Invalid number format in ID or Population");
+            showError("Некорректный формат числа.");
         } catch (SQLException ex) {
             handlePostgreSQLError(ex);
         } catch (Exception ex) {
@@ -93,7 +150,7 @@ public class CountriesPanel extends JPanel {
     private void deleteCountry() {
         int selectedRow = table.getSelectedRow();
         if (selectedRow == -1) {
-            showError("Please select a country to delete");
+            showError("Выберите страну для удаления.");
             return;
         }
 
@@ -131,15 +188,15 @@ public class CountriesPanel extends JPanel {
 
     private void handlePostgreSQLError(SQLException ex) {
         String errorMessage;
-        if (ex.getSQLState().startsWith("23")) { // Integrity constraint violation
-            errorMessage = "Cannot delete country: referenced by other records";
+        if (ex.getSQLState().startsWith("23")) {
+            errorMessage = "Ошибка: нарушение ограничений базы данных.";
         } else {
-            errorMessage = "Database error: " + ex.getMessage();
+            errorMessage = "Ошибка базы данных: " + ex.getMessage();
         }
         showError(errorMessage);
     }
 
     private void showError(String message) {
-        JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
+        JOptionPane.showMessageDialog(this, message, "Ошибка", JOptionPane.ERROR_MESSAGE);
     }
 }
